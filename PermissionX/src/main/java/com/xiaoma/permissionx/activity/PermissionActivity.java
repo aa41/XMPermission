@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -36,45 +37,22 @@ public class PermissionActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        Log.e("111111111111111111","resume");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.e("111111111111111111","pause");
+
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        List<String> shouldShowRequestPermissionRationales = new ArrayList<>();
-        List<String> grantedPermissions = new ArrayList<>();
-        List<String> deniedPermissions = new ArrayList<>();
-
-        if (requestCode == permissionRequestCode) {
-            for (int i = 0; i < permissions.length; i++) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    boolean shouldShow = shouldShowRequestPermissionRationale(permissions[i]);
-                    if (!shouldShow) {
-                        shouldShowRequestPermissionRationales.add(permissions[i]);
-                    }
-                }
-                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                    grantedPermissions.add(permissions[i]);
-                } else {
-                    deniedPermissions.add(permissions[i]);
-                }
-
-            }
-
-        }
-        if (PermissionAction.currentAction != null) {
-            PermissionAction.currentAction.permissionResult(grantedPermissions, deniedPermissions, shouldShowRequestPermissionRationales);
-
-            if (grantedPermissions.size() == permissions.length) {
-                PermissionAction.currentAction.grantedCallback(grantedPermissions);
-            } else {
-                if (deniedPermissions.size() > 0) {
-                    PermissionAction.currentAction.deniedCallback(deniedPermissions, shouldShowRequestPermissionRationales);
-                } else if (shouldShowRequestPermissionRationales.size() > 0) {
-                    PermissionAction.currentAction.neverShowedCallback(shouldShowRequestPermissionRationales);
-                }
-
-            }
-            PermissionAction.currentAction = null;
-        }
-
+       PermissionAction.currentAction.onRequestPermissionsResult(this,requestCode,permissions,grantResults);
         finish();
     }
 }

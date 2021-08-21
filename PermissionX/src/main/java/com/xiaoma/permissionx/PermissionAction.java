@@ -2,9 +2,17 @@ package com.xiaoma.permissionx;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.xiaoma.permissionx.activity.PermissionActivity;
 import com.xiaoma.permissionx.callback.IPermissionAllGrantedCallback;
@@ -16,9 +24,10 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PermissionAction implements IPermissionCallback,IPermissionNeverShowedCallback,IPermissionAllGrantedCallback,IPermissionDeniedCallback
-{
+public class PermissionAction implements IPermissionCallback, IPermissionNeverShowedCallback, IPermissionAllGrantedCallback, IPermissionDeniedCallback {
     public static final String PERMISSIONS = "permissions";
+    private final int permissionRequestCode = 10101;
+
 
     private WeakReference<Activity> actRef;
     private ArrayList<String> permissions;
@@ -31,14 +40,14 @@ public class PermissionAction implements IPermissionCallback,IPermissionNeverSho
     public static PermissionAction currentAction;
 
 
-    public void openPermissionSettings(){
+    public void openPermissionSettings() {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
                 if (actRef != null) {
                     Activity targetAct = actRef.get();
                     if (targetAct != null && !(targetAct instanceof PermissionActivity) && permissions != null && !permissions.isEmpty()) {
-                       //todo
+                        //todo
                         /*Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                                          intent.setData(Uri.parse("package:" + getPackageName())); // 根据包名打开对应的设置界面
                                          startActivity(intent);*/
@@ -55,11 +64,32 @@ public class PermissionAction implements IPermissionCallback,IPermissionNeverSho
             public void run() {
                 if (actRef != null) {
                     Activity targetAct = actRef.get();
-                    if (targetAct != null && !(targetAct instanceof PermissionActivity) && permissions != null && !permissions.isEmpty()) {
-                        currentAction = PermissionAction.this;
-                        Intent intent = new Intent(targetAct, PermissionActivity.class);
-                        intent.putStringArrayListExtra(PERMISSIONS, permissions);
-                        targetAct.startActivity(intent);
+                    if (targetAct != null && permissions != null && !permissions.isEmpty()) {
+                        boolean isDenied = false;
+                        for (String permission : permissions) {
+                            int flag = ActivityCompat.checkSelfPermission(targetAct, permission);
+                            boolean isGranted = flag == PackageManager.PERMISSION_GRANTED;
+                            if (!isGranted) {
+                                isDenied = true;
+                                break;
+                            }
+                        }
+                        if (isDenied) {
+                            currentAction = PermissionAction.this;
+                            Intent intent = new Intent(targetAct, PermissionActivity.class);
+                            intent.putStringArrayListExtra(PERMISSIONS, permissions);
+                            targetAct.startActivity(intent);
+                        } else {
+                            int[] granted = new int[permissions.size()];
+                            for (int i = 0; i < granted.length; i++) {
+                                granted[i] = PackageManager.PERMISSION_GRANTED;
+                            }
+                            onRequestPermissionsResult(targetAct, permissionRequestCode, permissions.toArray(new String[0]), granted);
+                        }
+
+
+                    } else {
+                        error();
                     }
                 }
             }
@@ -76,6 +106,42 @@ public class PermissionAction implements IPermissionCallback,IPermissionNeverSho
             }
         }
     }
+
+    public void onRequestPermissionsResult(Activity activity, int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        List<String> shouldShowRequestPermissionRationales = new ArrayList<>();
+        List<String> grantedPermissions = new ArrayList<>();
+        List<String> deniedPermissions = new ArrayList<>();
+
+        if (requestCode == permissionRequestCode) {
+            for (int i = 0; i < permissions.length; i++) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    boolean shouldShow = activity.shouldShowRequestPermissionRationale(permissions[i]);
+                    if (!shouldShow) {
+                        shouldShowRequestPermissionRationales.add(permissions[i]);
+                    }
+                }
+                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    grantedPermissions.add(permissions[i]);
+                } else {
+                    deniedPermissions.add(permissions[i]);
+                }
+
+            }
+
+        }
+        permissionResult(grantedPermissions, deniedPermissions, shouldShowRequestPermissionRationales);
+        if (grantedPermissions.size() == permissions.length) {
+            grantedCallback(grantedPermissions);
+        } else {
+            if (deniedPermissions.size() > 0) {
+                deniedCallback(deniedPermissions, shouldShowRequestPermissionRationales);
+            } else if (shouldShowRequestPermissionRationales.size() > 0) {
+                neverShowedCallback(shouldShowRequestPermissionRationales);
+            }
+
+        }
+    }
+
 
     @Override
     public void error() {
@@ -96,10 +162,10 @@ public class PermissionAction implements IPermissionCallback,IPermissionNeverSho
     }
 
     @Override
-    public void deniedCallback(List<String> deniedPermissions,List<String> neverShowedPermissions) {
+    public void deniedCallback(List<String> deniedPermissions, List<String> neverShowedPermissions) {
         if (deniedCallbacks != null && !deniedCallbacks.isEmpty()) {
             for (IPermissionDeniedCallback callback : deniedCallbacks) {
-                callback.deniedCallback(deniedPermissions,neverShowedPermissions);
+                callback.deniedCallback(deniedPermissions, neverShowedPermissions);
             }
         }
     }
@@ -111,6 +177,11 @@ public class PermissionAction implements IPermissionCallback,IPermissionNeverSho
                 callback.neverShowedCallback(neverShowedPermissions);
             }
         }
+    }
+
+    public void permissionEnd() {
+        Toast.makeText(actRef.get(), "?????????????????????", Toast.LENGTH_SHORT).show();
+        PermissionAction.currentAction = null;
     }
 
     public static class Builder {
